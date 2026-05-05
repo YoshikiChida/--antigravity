@@ -432,7 +432,7 @@ export const generateShift = (
 
     let bestScore = quickScore(finalAssignments);
 
-    for (let iter = 0; iter < 3000; iter++) {
+    for (let iter = 0; iter < 6000; iter++) {
       const i1 = Math.floor(Math.random() * allPairs.length);
       let i2 = Math.floor(Math.random() * allPairs.length);
       while (i2 === i1) i2 = Math.floor(Math.random() * allPairs.length);
