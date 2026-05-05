@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant landscape (@media (orientation: landscape));
+
+@theme {
+  --color-yamato-yellow: #FFD700;
+  --color-yamato-black: #1A1A1A;
+}
+
+@layer base {
+  body {
+    background-color: #f3f4f6;
+    color: var(--color-yamato-black);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  .dark body {
+    background-color: #0f172a;
+    color: #f1f5f9;
+  }
+}
+
+/* ── Animations ─────────────────────────────────────────── */
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(110%) scale(0.9); }
+  to   { opacity: 1; transform: translateX(0)   scale(1);   }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0)   scale(1);   }
+  to   { opacity: 0; transform: translateX(110%) scale(0.9); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(28px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes spin-loop {
+  to { transform: rotate(360deg); }
+}
+@keyframes ripple-out {
+  0%   { transform: scale(0);  opacity: 0.55; }
+  100% { transform: scale(5);  opacity: 0;    }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(255, 215, 0, 0);  }
+}
+@keyframes count-tick {
+  0%   { transform: translateY(4px); opacity: 0; }
+  100% { transform: translateY(0);   opacity: 1; }
+}
+
+.animate-toast-in    { animation: toast-in  0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.animate-slide-up    { animation: slide-up  0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.animate-fade-in     { animation: fade-in   0.2s  ease both; }
+.animate-spin-ui     { animation: spin-loop 0.75s linear infinite; }
+.animate-pulse-glow  { animation: pulse-glow 1.8s ease-in-out infinite; }
+.animate-count-tick  { animation: count-tick 0.15s ease both; }
+
+/* ── Ripple cell ────────────────────────────────────────── */
+.ripple-cell {
+  position: relative;
+  overflow: hidden;
+}
+.ripple-cell > .ripple-dot {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 215, 0, 0.55);
+  transform: scale(0);
+  pointer-events: none;
+  animation: ripple-out 0.5s ease-out forwards;
+  margin-left: -12px;
+  margin-top: -12px;
+}
+
+/* ── Drag source 3-D tilt ────────────────────────────────── */
+.drag-source {
+  transform: rotate(2deg) scale(0.93) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25) !important;
+  opacity: 0.65 !important;
+  z-index: 10;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.drop-target-highlight {
+  outline: 2px solid #FFD700;
+  outline-offset: -2px;
+  background-color: rgba(255, 215, 0, 0.12) !important;
+}
+
+/* ── Score ring transition ──────────────────────────────── */
+.score-ring-circle {
+  transition: stroke-dashoffset 1.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Dark mode body bg ──────────────────────────────────── */
+.dark {
+  color-scheme: dark;
+}
+
+/* ── Dark mode: form controls (global) ─────────────────── */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: #374151 !important;
+  color: #f9fafb !important;
+  border-color: #4b5563 !important;
+  color-scheme: dark;
+}
+
+/* ── Dark mode: scroll tables ────────────────────────────── */
+.dark [data-table-scroll] {
+  background-color: #1f2937;
+}
+.dark [data-table-scroll] thead th {
+  background-color: #111827 !important;
+  color: #9ca3af !important;
+  border-color: #374151 !important;
+}
+.dark [data-table-scroll] tbody td,
+.dark [data-table-scroll] tbody th {
+  border-color: #374151 !important;
+  color: #e5e7eb;
+}
+.dark [data-table-scroll] tbody tr:hover {
+  background-color: rgba(255, 215, 0, 0.04) !important;
+}
+/* sticky columns */
+.dark [data-table-scroll] td.sticky,
+.dark [data-table-scroll] th.sticky {
+  background-color: #1f2937 !important;
+  color: #e5e7eb !important;
+}
+/* day-colored backgrounds */
+.dark [data-table-scroll] .bg-red-50   { background-color: rgba(127, 29, 29, 0.2)  !important; }
+.dark [data-table-scroll] .bg-blue-50  { background-color: rgba(23, 37, 84, 0.2)   !important; }
+.dark [data-table-scroll] .bg-green-50 { background-color: rgba(5, 46, 22, 0.15)   !important; }
+.dark [data-table-scroll] .bg-gray-50  { background-color: #1f2937                 !important; }
+.dark [data-table-scroll] .bg-gray-100 { background-color: #374151                 !important; }
+.dark [data-table-scroll] .bg-white    { background-color: #1f2937                 !important; }
+.dark [data-table-scroll] .bg-red-100  { background-color: rgba(127, 29, 29, 0.3)  !important; }
+.dark [data-table-scroll] .bg-yellow-50{ background-color: rgba(120, 83, 5, 0.15)  !important; }
+.dark [data-table-scroll] .bg-indigo-50{ background-color: rgba(49, 46, 129, 0.2)  !important; }
+/* right sticky col */
+.dark [data-table-scroll] td.sticky.right-0 {
+  background-color: #1f2937 !important;
+}
+/* text colors inside table */
+.dark [data-table-scroll] .text-gray-900,
+.dark [data-table-scroll] .text-gray-800,
+.dark [data-table-scroll] .text-gray-700 { color: #e5e7eb !important; }
+.dark [data-table-scroll] .text-gray-600 { color: #d1d5db !important; }
+.dark [data-table-scroll] .text-gray-500,
+.dark [data-table-scroll] .text-gray-400 { color: #9ca3af !important; }
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white !important;
+  }
+  .overflow-auto,
+  .overflow-x-auto,
+  .overflow-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+  table {
+    font-size: 7px !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+  th, td {
+    padding: 1px 2px !important;
+    min-width: 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .shadow-sm, .shadow { box-shadow: none !important; }
+  .rounded-lg, .rounded-md { border-radius: 0 !important; }
+}
