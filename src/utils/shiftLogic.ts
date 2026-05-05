@@ -115,11 +115,11 @@ export const generateShift = (
 
   // ── パターン多様性: パターンごとに重み戦略を変える ──────────────
   const diversityConfigs = [
-    { wWk: 1.0, wMins: 1.0, wIso: 1.0, wCon: 1.0, noise: 120 },   // 0: バランス
-    { wWk: 3.0, wMins: 0.2, wIso: 1.0, wCon: 1.0, noise: 250 },   // 1: 土日均等重視
-    { wWk: 0.2, wMins: 3.0, wIso: 1.0, wCon: 1.0, noise: 250 },   // 2: 時間均等重視
-    { wWk: 1.0, wMins: 1.0, wIso: 3.5, wCon: 2.0, noise: 180 },   // 3: パターン品質重視
-    { wWk: 1.8, wMins: 1.8, wIso: 1.5, wCon: 2.5, noise: 350 },   // 4: バランス強化
+    { wWk: 2.0, wMins: 2.0, wIso: 1.5, wCon: 1.5, noise: 50 },    // 0: 高精度バランス
+    { wWk: 4.0, wMins: 1.0, wIso: 1.5, wCon: 1.5, noise: 30 },    // 1: 土日均等重視
+    { wWk: 1.0, wMins: 4.0, wIso: 1.5, wCon: 1.5, noise: 30 },    // 2: 時間均等重視
+    { wWk: 2.5, wMins: 2.5, wIso: 3.0, wCon: 2.5, noise: 40 },    // 3: パターン品質重視
+    { wWk: 3.0, wMins: 3.0, wIso: 2.0, wCon: 2.0, noise: 60 },    // 4: バランス強化
   ] as const;
   const dc = diversityConfigs[patternIndex % 5];
 
@@ -129,7 +129,7 @@ export const generateShift = (
   let bestAssignments: Record<string, Record<string, string>> | null = null;
   let maxAssignedTaskIndex = -1;
   let iterations = 0;
-  const MAX_ITERATIONS = 50000; // Limits backtracking to prevent freezing
+  const MAX_ITERATIONS = 200000; // Limits backtracking to prevent freezing
 
   const solve = (taskIndex: number): boolean => {
     if (iterations > MAX_ITERATIONS) return false;
@@ -181,7 +181,7 @@ export const generateShift = (
       
       // Calculate consecutive days forward (if modifying past days, though we assign sequentially so forward is usually 0)
       // But for robustness, just restrict backward consec >= 5
-      if (consec >= 5) return false;
+      if (consec >= 4) return false; // 5連勤防止（4日連続の翌日は割当不可）
 
       return true;
     });
@@ -190,22 +190,43 @@ export const generateShift = (
     if (eligible.length === 0) {
       const courseObj = courses.find(c => c.id === task.course.id);
       const courseLabel = courseObj?.name ?? task.course.id;
+      const [, mm, dd] = task.dateStr.split('-');
+      const dateLabel = `${Number(mm)}/${Number(dd)}`;
       const reasons: string[] = [];
       const potentialEmps = employees.filter(e => e.assignableCourseIds.includes(task.course.id));
       if (potentialEmps.length === 0) {
-        reasons.push(`「${courseLabel}」に対応できる社員がいません。社員管理で担当コースを追加してください。`);
+        reasons.push(`【解決策】「${courseLabel}」に対応できる社員がいません → 社員管理で担当コースを追加してください。`);
       } else {
-        potentialEmps.slice(0, 3).forEach(emp => {
+        potentialEmps.forEach(emp => {
           const ev = emp.events?.[yearMonth]?.[task.dateStr] ||
             (emp.desiredOffDays[yearMonth]?.includes(task.dateStr) ? '希望休' : '');
           if (ev === '希望休') {
-            reasons.push(`${emp.name}さん：希望休を変更すると割り当て可能になります。`);
+            reasons.push(`【解決策】${emp.name}さんの${dateLabel}の希望休を解除 → 「予定」タブで希望休を削除すると割り当て可能になります。`);
           } else if (ev) {
-            reasons.push(`${emp.name}さん：「${ev}」の予定を変更すると割り当て可能になります。`);
+            reasons.push(`【解決策】${emp.name}さんの${dateLabel}の「${ev}」を別日に移動 → 「予定」タブで${dateLabel}の${ev}を削除し、別の日に設定してください。`);
           } else if (workDays[emp.id] >= emp.maxDaysPerMonth) {
-            reasons.push(`${emp.name}さん：最大出勤日数(${emp.maxDaysPerMonth}日)に到達。上限を増やすか社員を追加してください。`);
+            reasons.push(`【解決策】${emp.name}さんの最大出勤日数を${emp.maxDaysPerMonth}日→${emp.maxDaysPerMonth + 1}日に変更 → 社員管理で上限を引き上げてください。`);
           } else {
-            reasons.push(`${emp.name}さん：6連勤回避または当日他コースと重複のため割り当て不可。`);
+            // 連勤チェック - 具体的にどの日が連勤かを表示
+            let consecDays: string[] = [];
+            let cObj = new Date(task.dateObj);
+            cObj.setDate(cObj.getDate() - 1);
+            while (true) {
+              const pStr = format(cObj, 'yyyy-MM-dd');
+              if (!dateStrings.includes(pStr)) break;
+              const wPrev = Object.values(assignments[pStr] || {}).includes(emp.id) ||
+                (emp.events?.[yearMonth]?.[pStr] && emp.events?.[yearMonth]?.[pStr] !== '希望休');
+              if (wPrev) { consecDays.unshift(pStr); cObj.setDate(cObj.getDate() - 1); }
+              else break;
+            }
+            if (consecDays.length >= 4) {
+              const consecStart = consecDays[0].split('-');
+              reasons.push(`【解決策】${emp.name}さんは${Number(consecStart[1])}/${Number(consecStart[2])}から${consecDays.length}連勤中 → 連勤中の1日を別の社員に振替えると割り当て可能になります。`);
+            } else if (Object.values(assignments[task.dateStr]).includes(emp.id)) {
+              reasons.push(`【解決策】${emp.name}さんは${dateLabel}に別コース割当済み → 日別コース設定でコース数を減らすか、社員を追加してください。`);
+            } else {
+              reasons.push(`${emp.name}さん：連勤回避または重複のため割り当て不可。`);
+            }
           }
         });
       }
@@ -295,9 +316,9 @@ export const generateShift = (
         cObj.setDate(cObj.getDate() - 1);
       }
 
-      // ペナルティ: 4連勤している場合、5日目も出勤させることへのペナルティ（なるべく休ませる）
-      if (consecScore === 4) {
-        score += weightConsec; // ペナルティを課すことで優先順位を下げる
+      // ペナルティ: 3連勤以上で段階的にペナルティを増加
+      if (consecScore >= 3) {
+        score += weightConsec * (consecScore - 2); // 3連勤=1倍, 4連勤=2倍
       }
 
       return { emp, score };
@@ -333,30 +354,72 @@ export const generateShift = (
     JSON.parse(JSON.stringify(bestAssignments || assignments));
 
   (() => {
-    // quickScore: 土日格差 + 飛び石パターン数（低いほど良い）
+    // quickScore: 土日格差 + 労働時間格差 + 飛び石パターン + 連勤ペナルティ（低いほど良い）
     const quickScore = (a: Record<string, Record<string, string>>): number => {
       const wkMap: Record<string, number> = {};
+      const minsMap: Record<string, number> = {};
       const schedMap: Record<string, boolean[]> = {};
-      employees.forEach(e => { wkMap[e.id] = 0; schedMap[e.id] = []; });
+      employees.forEach(e => { wkMap[e.id] = 0; minsMap[e.id] = 0; schedMap[e.id] = []; });
       dateStrings.forEach((ds, idx) => {
         const dow = dates[idx].getDay();
         const isWk = dow === 0 || dow === 6;
         employees.forEach(emp => {
-          const worked = Object.values(a[ds] || {}).includes(emp.id);
-          if (worked && isWk) wkMap[emp.id]++;
+          const assignedCourseId = Object.keys(a[ds] || {}).find(cId => a[ds][cId] === emp.id);
+          const evType = emp.events?.[yearMonth]?.[ds] || (emp.desiredOffDays?.[yearMonth]?.includes(ds) ? '希望休' : '');
+          const worked = !!assignedCourseId || (!!evType && evType !== '希望休');
+          if (assignedCourseId && isWk) wkMap[emp.id]++;
+          if (evType && evType !== '希望休' && isWk) wkMap[emp.id]++;
+          if (assignedCourseId) {
+            const c = courses.find(x => x.id === assignedCourseId);
+            if (c) minsMap[emp.id] += calculateWorkMinutes(c.startTime, c.endTime, c.breakMinutes);
+          } else if (evType && evType !== '希望休') {
+            minsMap[emp.id] += 480;
+          }
           schedMap[emp.id].push(worked);
         });
       });
       let s = 0;
-      const wkVals = employees.map(e => wkMap[e.id]);
-      if (wkVals.length >= 2) s += (Math.max(...wkVals) - Math.min(...wkVals)) * 10;
+      const activeEmps = employees.filter(e => e.assignableCourseIds.length > 0);
+      // 土日格差ペナルティ（格差1日につき15点）
+      const wkVals = activeEmps.map(e => wkMap[e.id]);
+      if (wkVals.length >= 2) s += (Math.max(...wkVals) - Math.min(...wkVals)) * 15;
+      // 労働時間格差ペナルティ（格差1時間につき3点）
+      const hrVals = activeEmps.map(e => Math.round(minsMap[e.id] / 60));
+      if (hrVals.length >= 2) s += (Math.max(...hrVals) - Math.min(...hrVals)) * 3;
+      // 飛び石パターンペナルティ
       employees.forEach(emp => {
         const sc = schedMap[emp.id];
         for (let i = 0; i < sc.length - 3; i++) {
-          if (!sc[i] && sc[i+1] && !sc[i+2] && sc[i+3]) s += 4;
+          if (!sc[i] && sc[i+1] && !sc[i+2] && sc[i+3]) s += 5;
+        }
+        // 5連勤ペナルティ
+        let consec = 0;
+        for (let i = 0; i < sc.length; i++) {
+          if (sc[i]) { consec++; if (consec >= 5) s += 10; }
+          else consec = 0;
         }
       });
       return s;
+    };
+
+    // 連勤チェック用ヘルパー
+    const getConsecAt = (a: Record<string, Record<string, string>>, empId: string, dateIdx: number): number => {
+      let consec = 0;
+      for (let i = dateIdx; i >= 0; i--) {
+        const ds = dateStrings[i];
+        const worked = Object.values(a[ds] || {}).includes(empId) ||
+          (employees.find(e => e.id === empId)?.events?.[yearMonth]?.[ds] &&
+           employees.find(e => e.id === empId)?.events?.[yearMonth]?.[ds] !== '希望休');
+        if (worked) consec++; else break;
+      }
+      for (let i = dateIdx + 1; i < dateStrings.length; i++) {
+        const ds = dateStrings[i];
+        const worked = Object.values(a[ds] || {}).includes(empId) ||
+          (employees.find(e => e.id === empId)?.events?.[yearMonth]?.[ds] &&
+           employees.find(e => e.id === empId)?.events?.[yearMonth]?.[ds] !== '希望休');
+        if (worked) consec++; else break;
+      }
+      return consec;
     };
 
     const allPairs: { dateStr: string; courseId: string; empId: string }[] = [];
@@ -369,7 +432,7 @@ export const generateShift = (
 
     let bestScore = quickScore(finalAssignments);
 
-    for (let iter = 0; iter < 400; iter++) {
+    for (let iter = 0; iter < 3000; iter++) {
       const i1 = Math.floor(Math.random() * allPairs.length);
       let i2 = Math.floor(Math.random() * allPairs.length);
       while (i2 === i1) i2 = Math.floor(Math.random() * allPairs.length);
@@ -392,11 +455,24 @@ export const generateShift = (
       const ev2 = emp2.events?.[yearMonth]?.[p1.dateStr] || (emp2.desiredOffDays?.[yearMonth]?.includes(p1.dateStr) ? '希望休' : '');
       if (ev2) continue;
 
+      // 連勤チェック（スワップ後に5連勤以上にならないか）
+      const idx1 = dateStrings.indexOf(p1.dateStr);
+      const idx2 = dateStrings.indexOf(p2.dateStr);
+
       // スワップ試行
       const old1 = finalAssignments[p1.dateStr][p1.courseId];
       const old2 = finalAssignments[p2.dateStr][p2.courseId];
       finalAssignments[p1.dateStr][p1.courseId] = p2.empId;
       finalAssignments[p2.dateStr][p2.courseId] = p1.empId;
+
+      // 連勤5以上になったらロールバック
+      const c1 = getConsecAt(finalAssignments, p2.empId, idx1);
+      const c2 = getConsecAt(finalAssignments, p1.empId, idx2);
+      if (c1 >= 5 || c2 >= 5) {
+        finalAssignments[p1.dateStr][p1.courseId] = old1;
+        finalAssignments[p2.dateStr][p2.courseId] = old2;
+        continue;
+      }
 
       const newScore = quickScore(finalAssignments);
       if (newScore < bestScore) {
