@@ -239,18 +239,18 @@ export const generateShift = (
     // Set weights based on priorityRule
     let weightWeekend = 5000;
     let weightMins = 1;
-    let weightIsolated = 2000;
+    let weightIsolated = 1000;
     let weightConsec = 2500;
 
     if (priorityRule === 'fairness') {
       weightWeekend = 10000;
       weightMins = 5;
-      weightIsolated = 1000;
+      weightIsolated = 500;
       weightConsec = 1000;
     } else if (priorityRule === 'consecutive') {
       weightWeekend = 2000;
       weightMins = 1;
-      weightIsolated = 5000;
+      weightIsolated = 2500;
       weightConsec = 5000;
     }
 
@@ -390,7 +390,7 @@ export const generateShift = (
       employees.forEach(emp => {
         const sc = schedMap[emp.id];
         for (let i = 0; i < sc.length - 3; i++) {
-          if (!sc[i] && sc[i+1] && !sc[i+2] && sc[i+3]) s += 5;
+          if (!sc[i] && sc[i+1] && !sc[i+2] && sc[i+3]) s += 2;
         }
         // 5連勤ペナルティ
         let consec = 0;
@@ -614,7 +614,7 @@ export const calculateShiftScore = (
         detail: `${isolatedCount}箇所`,
         severity: 'warning',
       });
-      score -= isolatedCount * 2;
+      score -= isolatedCount;
     }
 
     weekendWorkMap[emp.id] = empWeekendWork;
